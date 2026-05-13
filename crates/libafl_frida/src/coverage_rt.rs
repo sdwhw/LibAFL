@@ -13,11 +13,11 @@ use rangemap::RangeMap;
 use crate::helper::FridaRuntime;
 
 /// (Default) map size for frida coverage reporting
-pub const MAP_SIZE: usize = 64 * 1024;
+pub const MAP_SIZE: usize = 1024 * 1024;
 
 #[derive(Debug)]
 struct CoverageRuntimeInner {
-    map: [u8; MAP_SIZE],
+    map: Box<[u8]>,
     previous_pc: u64,
     _pinned: PhantomPinned,
 }
@@ -56,11 +56,11 @@ impl FridaRuntime for CoverageRuntime {
 
 impl CoverageRuntime {
     /// Create a new coverage runtime
-    #[allow(clippy::large_stack_arrays)]
     #[must_use]
     pub fn new() -> Self {
+        let map: Box<[u8]> = vec![0u8; MAP_SIZE].into_boxed_slice();
         Self(Rc::pin(RefCell::new(CoverageRuntimeInner {
-            map: [0_u8; MAP_SIZE],
+            map,
             previous_pc: 0,
             _pinned: PhantomPinned,
         })))
@@ -79,7 +79,7 @@ impl CoverageRuntime {
     pub fn generate_inline_code(&mut self, h64: u64) -> Box<[u8]> {
         let mut borrow = self.0.borrow_mut();
         let prev_loc_ptr = &raw mut borrow.previous_pc;
-        let map_addr_ptr = &raw mut borrow.map;
+        let map_addr_ptr = borrow.map.as_mut_ptr();
         let mut ops = dynasmrt::VecAssembler::<dynasmrt::aarch64::Aarch64Relocation>::new(0);
         dynasm!(ops
             ;   .arch aarch64
@@ -137,7 +137,7 @@ impl CoverageRuntime {
     pub fn generate_inline_code(&mut self, h64: u64) -> Box<[u8]> {
         let mut borrow = self.0.borrow_mut();
         let prev_loc_ptr = &raw mut borrow.previous_pc;
-        let map_addr_ptr = &raw mut borrow.map;
+        let map_addr_ptr = borrow.map.as_mut_ptr();
         let mut ops = dynasmrt::VecAssembler::<dynasmrt::x64::X64Relocation>::new(0);
         dynasm!(ops
             ;   .arch x64
@@ -186,7 +186,7 @@ impl CoverageRuntime {
     pub fn generate_inline_code(&mut self, h32: u64) -> Box<[u8]> {
         let mut borrow = self.0.borrow_mut();
         let prev_loc_ptr = &raw mut borrow.previous_pc;
-        let map_addr_ptr = &raw mut borrow.map;
+        let map_addr_ptr = borrow.map.as_mut_ptr();
         let h32 = h32 as u32;
         let mut ops = dynasmrt::VecAssembler::<dynasmrt::x86::X86Relocation>::new(0);
         dynasm!(ops
