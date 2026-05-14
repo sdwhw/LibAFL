@@ -679,7 +679,15 @@ where
                     );
                     if let Some(rt) = runtimes.match_first_type_mut::<CoverageRuntime>() {
                         let start = output.writer().pc();
-                        rt.emit_coverage_mapping(address, output);
+                        // Look up which module owns this block so the
+                        // coverage map can hash a module-relative offset
+                        // (stable across ASLR / process restarts).
+                        let ranges_b = ranges.borrow();
+                        let (module_base, module_name) = ranges_b
+                            .get_key_value(&address)
+                            .map(|(range, (_id, name))| (range.start, name.as_bytes()))
+                            .unwrap_or((0u64, b"".as_slice()));
+                        rt.emit_coverage_mapping(address, module_base, module_name, output);
                         log::trace!(
                             "emitted coverage info mapping for {:x} at {:x}-{:x}",
                             address,

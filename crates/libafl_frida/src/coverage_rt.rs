@@ -232,9 +232,23 @@ impl CoverageRuntime {
     }
 
     /// Emits coverage mapping into the current basic block.
+    ///
+    /// Hash on (module name, address - module_base) rather than the
+    /// raw address so the same basic block lands in the same map slot
+    /// across process restarts and ASLR
     #[inline]
-    pub fn emit_coverage_mapping(&mut self, address: u64, output: &StalkerOutput) {
-        let h64 = hash_std(&address.to_le_bytes());
+    pub fn emit_coverage_mapping(
+        &mut self,
+        address: u64,
+        module_base: u64,
+        module_name_bytes: &[u8],
+        output: &StalkerOutput,
+    ) {
+        let offset = address.wrapping_sub(module_base);
+        let mut buf = Vec::with_capacity(module_name_bytes.len() + 8);
+        buf.extend_from_slice(module_name_bytes);
+        buf.extend_from_slice(&offset.to_le_bytes());
+        let h64 = hash_std(&buf);
         let writer = output.writer();
 
         // Since the AARCH64 instruction set requires that a register be used if
